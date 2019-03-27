@@ -50,6 +50,33 @@ typedef struct _TLSDataParams {
 	mbedtls_net_context server_fd;
 }TLSDataParams;
 
+/**
+ * @brief Root CA certificate reader
+ *
+ * Defines a function type to read out root CA certificate from a location.
+ * Location is a string passed to this function unchanged and can be interpreted
+ * in a platform-specific way.
+ */
+typedef int (*iot_root_ca_reader_t)(mbedtls_x509_crt*, const char*);
+
+/**
+ * @brief Device certificate reader
+ *
+ * Defines a function type to read out device certificate from a location.
+ * Location is a string passed to this function unchanged and can be interpreted
+ * in a platform-specific way.
+ */
+typedef int (*iot_device_cert_reader_t)(mbedtls_x509_crt*, const char*);
+
+/**
+ * @brief Private key reader
+ *
+ * Defines a function type to read out private key from a location.
+ * Location is a string passed to this function unchanged and can be interpreted
+ * in a platform-specific way.
+ */
+typedef int (*iot_device_pk_reader_t)(mbedtls_pk_context*, const char*);
+
 #define IOTSDKC_NETWORK_MBEDTLS_PLATFORM_H_H
 
 #ifdef __cplusplus

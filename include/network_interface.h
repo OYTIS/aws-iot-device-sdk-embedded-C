@@ -48,13 +48,16 @@ typedef struct Network Network;
  * TLS networking layer to create a TLS secured socket.
  */
 typedef struct {
-	char *pRootCALocation;                ///< Pointer to string containing the filename (including path) of the root CA file.
-	char *pDeviceCertLocation;            ///< Pointer to string containing the filename (including path) of the device certificate.
-	char *pDevicePrivateKeyLocation;    ///< Pointer to string containing the filename (including path) of the device private key file.
-	char *pDestinationURL;                ///< Pointer to string containing the endpoint of the MQTT service.
-	uint16_t DestinationPort;            ///< Integer defining the connection port of the MQTT service.
-	uint32_t timeout_ms;                ///< Unsigned integer defining the TLS handshake timeout value in milliseconds.
-	bool ServerVerificationFlag;        ///< Boolean.  True = perform server certificate hostname validation.  False = skip validation \b NOT recommended.
+	char *pRootCALocation;				///< Pointer to string containing the filename (including path) of the root CA file.
+	char *pDeviceCertLocation;			///< Pointer to string containing the filename (including path) of the device certificate.
+	char *pDevicePrivateKeyLocation;		///< Pointer to string containing the filename (including path) of the device private key file.
+	iot_root_ca_reader_t  pRootCAReader;		///< Pointer to a platform-specific root CA reader function
+	iot_device_cert_reader_t pDeviceCertReader;	///< Pointer to a platform-specific device certificate reader function
+	iot_device_pk_reader_t pDevicePrivateKeyReader;	///< Pointer to a platform-specific device private key reader function
+	char *pDestinationURL;				///< Pointer to string containing the endpoint of the MQTT service.
+	uint16_t DestinationPort;			///< Integer defining the connection port of the MQTT service.
+	uint32_t timeout_ms;				///< Unsigned integer defining the TLS handshake timeout value in milliseconds.
+	bool ServerVerificationFlag;			///< Boolean.  True = perform server certificate hostname validation.  False = skip validation \b NOT recommended.
 } TLSConnectParams;
 
 /**
@@ -84,8 +87,11 @@ struct Network {
  *
  * @param pNetwork - Pointer to a Network struct defining the network interface.
  * @param pRootCALocation - Path of the location of the Root CA
+ * @param pRootCAReader - Function to read out the root CA certificate from pRootCALocation
  * @param pDeviceCertLocation - Path to the location of the Device Cert
- * @param pDevicyPrivateKeyLocation - Path to the location of the device private key file
+ * @param pDeviceCertReader - Function to read out the device certificate from pDeviceCertLocation
+ * @param pDevicePrivateKeyLocation - Path to the location of the device private key file
+ * @param pDevicePrivateKeyReader - Function to read out the device private key from pDeviceCertLocation
  * @param pDestinationURL - The target endpoint to connect to
  * @param DestinationPort - The port on the target to connect to
  * @param timeout_ms - The value to use for timeout of operation
@@ -93,9 +99,11 @@ struct Network {
  *
  * @return IoT_Error_t - successful initialization or TLS error
  */
-IoT_Error_t iot_tls_init(Network *pNetwork, char *pRootCALocation, char *pDeviceCertLocation,
-						 char *pDevicePrivateKeyLocation, char *pDestinationURL,
-						 uint16_t DestinationPort, uint32_t timeout_ms, bool ServerVerificationFlag);
+IoT_Error_t iot_tls_init(Network *pNetwork, char *pRootCALocation, iot_root_ca_reader_t pRootCAReader,
+                                            char *pDeviceCertLocation, iot_device_cert_reader_t pDeviceCertReader,
+                                            char *pDevicePrivateKeyLocation, iot_device_pk_reader_t pDevicePrivateKeyReader,
+                                            char *pDestinationURL,  uint16_t DestinationPort,
+                                            uint32_t timeout_ms, bool ServerVerificationFlag);
 
 /**
  * @brief Create a TLS socket and open the connection

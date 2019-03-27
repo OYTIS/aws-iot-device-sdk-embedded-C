@@ -60,23 +60,35 @@ static int _iot_tls_verify_cert(void *data, mbedtls_x509_crt *crt, int depth, ui
 	return 0;
 }
 
-void _iot_tls_set_connect_params(Network *pNetwork, char *pRootCALocation, char *pDeviceCertLocation,
-								 char *pDevicePrivateKeyLocation, char *pDestinationURL,
-								 uint16_t destinationPort, uint32_t timeout_ms, bool ServerVerificationFlag) {
+static int parse_pk_file_without_password(mbedtls_pk_context* pk, const char* path) {
+	return mbedtls_pk_parse_keyfile(pk, path, "");
+}
+
+void _iot_tls_set_connect_params(Network *pNetwork, char *pRootCALocation, iot_root_ca_reader_t pRootCAReader,
+							char *pDeviceCertLocation, iot_device_cert_reader_t pDeviceCertReader,
+							char *pDevicePrivateKeyLocation, iot_device_pk_reader_t pDevicePrivateKeyReader,
+							char *pDestinationURL, uint16_t destinationPort,
+							uint32_t timeout_ms, bool ServerVerificationFlag) {
 	pNetwork->tlsConnectParams.DestinationPort = destinationPort;
 	pNetwork->tlsConnectParams.pDestinationURL = pDestinationURL;
 	pNetwork->tlsConnectParams.pDeviceCertLocation = pDeviceCertLocation;
+	pNetwork->tlsConnectParams.pDeviceCertReader = pDeviceCertReader;
 	pNetwork->tlsConnectParams.pDevicePrivateKeyLocation = pDevicePrivateKeyLocation;
+	pNetwork->tlsConnectParams.pDevicePrivateKeyReader = pDevicePrivateKeyReader;
 	pNetwork->tlsConnectParams.pRootCALocation = pRootCALocation;
+	pNetwork->tlsConnectParams.pRootCAReader = pRootCAReader;
 	pNetwork->tlsConnectParams.timeout_ms = timeout_ms;
 	pNetwork->tlsConnectParams.ServerVerificationFlag = ServerVerificationFlag;
 }
 
-IoT_Error_t iot_tls_init(Network *pNetwork, char *pRootCALocation, char *pDeviceCertLocation,
-						 char *pDevicePrivateKeyLocation, char *pDestinationURL,
-						 uint16_t destinationPort, uint32_t timeout_ms, bool ServerVerificationFlag) {
-	_iot_tls_set_connect_params(pNetwork, pRootCALocation, pDeviceCertLocation, pDevicePrivateKeyLocation,
-								pDestinationURL, destinationPort, timeout_ms, ServerVerificationFlag);
+IoT_Error_t iot_tls_init(Network *pNetwork, char *pRootCALocation, iot_root_ca_reader_t pRootCAReader,
+                                            char *pDeviceCertLocation, iot_device_cert_reader_t pDeviceCertReader,
+                                            char *pDevicePrivateKeyLocation, iot_device_pk_reader_t pDevicePrivateKeyReader,
+                                            char *pDestinationURL,  uint16_t DestinationPort,
+                                            uint32_t timeout_ms, bool ServerVerificationFlag) {
+	_iot_tls_set_connect_params(pNetwork, pRootCALocation, pRootCAReader, pDeviceCertLocation, pDeviceCertReader,
+								pDevicePrivateKeyLocation, pDevicePrivateKeyReader,
+								pDestinationURL, DestinationPort, timeout_ms, ServerVerificationFlag);
 
 	pNetwork->connect = iot_tls_connect;
 	pNetwork->read = iot_tls_read;
@@ -102,6 +114,9 @@ IoT_Error_t iot_tls_connect(Network *pNetwork, TLSConnectParams *params) {
 	char portBuffer[6];
 	char vrfy_buf[512];
 	const char *alpnProtocols[] = { "x-amzn-mqtt-ca", NULL };
+	iot_root_ca_reader_t root_ca_reader = mbedtls_x509_crt_parse_file;
+	iot_device_cert_reader_t cert_reader = mbedtls_x509_crt_parse_file;
+	iot_device_pk_reader_t pk_reader = parse_pk_file_without_password;
 
 #ifdef ENABLE_IOT_DEBUG
 	unsigned char buf[MBEDTLS_DEBUG_BUFFER_SIZE];
@@ -112,9 +127,11 @@ IoT_Error_t iot_tls_connect(Network *pNetwork, TLSConnectParams *params) {
 	}
 
 	if(NULL != params) {
-		_iot_tls_set_connect_params(pNetwork, params->pRootCALocation, params->pDeviceCertLocation,
-									params->pDevicePrivateKeyLocation, params->pDestinationURL,
-									params->DestinationPort, params->timeout_ms, params->ServerVerificationFlag);
+		_iot_tls_set_connect_params(pNetwork, params->pRootCALocation, params->pRootCAReader,
+							params->pDeviceCertLocation, params->pDeviceCertReader,
+							params->pDevicePrivateKeyLocation, params->pDevicePrivateKeyReader,
+							params->pDestinationURL, params->DestinationPort,
+							params->timeout_ms, params->ServerVerificationFlag);
 	}
 
 	tlsDataParams = &(pNetwork->tlsDataParams);
@@ -135,24 +152,46 @@ IoT_Error_t iot_tls_connect(Network *pNetwork, TLSConnectParams *params) {
 		return NETWORK_MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED;
 	}
 
+	if (pNetwork->tlsConnectParams.pRootCAReader != NULL) {
+		IOT_DEBUG("\n  . Using custom root CA certificate reader ...");
+		root_ca_reader = pNetwork->tlsConnectParams.pRootCAReader;
+	} else {
+		IOT_DEBUG("\n  . Using mbedtls_x509_crt_parse as a root CA certificate reader ...");
+	}
+
 	IOT_DEBUG("  . Loading the CA root certificate ...");
-	ret = mbedtls_x509_crt_parse_file(&(tlsDataParams->cacert), pNetwork->tlsConnectParams.pRootCALocation);
+	ret = root_ca_reader(&(tlsDataParams->cacert), pNetwork->tlsConnectParams.pRootCALocation);
 	if(ret < 0) {
-		IOT_ERROR(" failed\n  !  mbedtls_x509_crt_parse returned -0x%x while parsing root cert\n\n", -ret);
+		IOT_ERROR(" failed\n  !  reader returned -0x%x while parsing root cert\n\n", -ret);
 		return NETWORK_X509_ROOT_CRT_PARSE_ERROR;
 	}
 	IOT_DEBUG(" ok (%d skipped)\n", ret);
 
-	IOT_DEBUG("  . Loading the client cert. and key...");
-	ret = mbedtls_x509_crt_parse_file(&(tlsDataParams->clicert), pNetwork->tlsConnectParams.pDeviceCertLocation);
+	if (pNetwork->tlsConnectParams.pDeviceCertReader != NULL) {
+		IOT_DEBUG("\n  . Using custom device certificate reader ...");
+		cert_reader = pNetwork->tlsConnectParams.pDeviceCertReader;
+	} else {
+		IOT_DEBUG("\n  . Using mbedtls_x509_crt_parse as a device certificate reader...");
+	}
+
+	IOT_DEBUG("  . Loading the client certificate ...");
+	ret = cert_reader(&(tlsDataParams->clicert), pNetwork->tlsConnectParams.pDeviceCertLocation);
 	if(ret != 0) {
-		IOT_ERROR(" failed\n  !  mbedtls_x509_crt_parse returned -0x%x while parsing device cert\n\n", -ret);
+		IOT_ERROR(" failed\n  !  reader returned -0x%x while parsing device cert\n\n", -ret);
 		return NETWORK_X509_DEVICE_CRT_PARSE_ERROR;
 	}
 
-	ret = mbedtls_pk_parse_keyfile(&(tlsDataParams->pkey), pNetwork->tlsConnectParams.pDevicePrivateKeyLocation, "");
+	if (pNetwork->tlsConnectParams.pDevicePrivateKeyReader != NULL) {
+		IOT_DEBUG("\n  . Using custom device private key reader ...");
+		pk_reader = pNetwork->tlsConnectParams.pDevicePrivateKeyReader;
+	} else {
+		IOT_DEBUG("\n  . Using mbedtls_pk_parse_keyfile as a device private key reader...");
+	}
+
+	IOT_DEBUG(" ok\n  . Loading the client private key ...");
+	ret = pk_reader(&(tlsDataParams->pkey), pNetwork->tlsConnectParams.pDevicePrivateKeyLocation);
 	if(ret != 0) {
-		IOT_ERROR(" failed\n  !  mbedtls_pk_parse_key returned -0x%x while parsing private key\n\n", -ret);
+		IOT_ERROR(" failed\n  !  reader returned -0x%x while parsing private key\n\n", -ret);
 		IOT_DEBUG(" path : %s ", pNetwork->tlsConnectParams.pDevicePrivateKeyLocation);
 		return NETWORK_PK_PRIVATE_KEY_PARSE_ERROR;
 	}

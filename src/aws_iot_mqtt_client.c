@@ -260,8 +260,10 @@ IoT_Error_t aws_iot_mqtt_init(AWS_IoT_Client *pClient, IoT_Client_Init_Params *p
 	pClient->clientStatus.isPingOutstanding = 0;
 	pClient->clientStatus.isAutoReconnectEnabled = pInitParams->enableAutoReconnect;
 
-	rc = iot_tls_init(&(pClient->networkStack), pInitParams->pRootCALocation, pInitParams->pDeviceCertLocation,
-					  pInitParams->pDevicePrivateKeyLocation, pInitParams->pHostURL, pInitParams->port,
+	rc = iot_tls_init(&(pClient->networkStack), pInitParams->pRootCALocation, pInitParams->pRootCAReader,
+					  pInitParams->pDeviceCertLocation, pInitParams->pDeviceCertReader,
+					  pInitParams->pDevicePrivateKeyLocation, pInitParams->pDevicePrivateKeyReader,
+					  pInitParams->pHostURL, pInitParams->port,
 					  pInitParams->tlsHandshakeTimeout_ms, pInitParams->isSSLHostnameVerify);
 
 	if(SUCCESS != rc) {

@@ -169,6 +169,9 @@ typedef struct {
 	char *pRootCALocation;				///< Pointer to a string defining the Root CA file (full file, not path)
 	char *pDeviceCertLocation;			///< Pointer to a string defining the device identity certificate file (full file, not path)
 	char *pDevicePrivateKeyLocation;        	///< Pointer to a string defining the device private key file (full file, not path)
+	iot_root_ca_reader_t  pRootCAReader;		///< Pointer to a platform-specific root CA reader function
+	iot_device_cert_reader_t pDeviceCertReader;	///< Pointer to a platform-specific device certificate reader function
+	iot_device_pk_reader_t pDevicePrivateKeyReader;///< Pointer to a platform-specific device private key reader function
 	uint32_t mqttPacketTimeout_ms;			///< Timeout for reading a complete MQTT packet. In milliseconds
 	uint32_t mqttCommandTimeout_ms;			///< Timeout for MQTT blocking calls. In milliseconds
 	uint32_t tlsHandshakeTimeout_ms;		///< TLS handshake timeout.  In milliseconds
@@ -182,9 +185,9 @@ typedef struct {
 extern const IoT_Client_Init_Params iotClientInitParamsDefault;
 
 #ifdef _ENABLE_THREAD_SUPPORT_
-#define IoT_Client_Init_Params_initializer { true, NULL, 0, NULL, NULL, NULL, 2000, 20000, 5000, true, NULL, NULL, false }
+#define IoT_Client_Init_Params_initializer { true, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 2000, 20000, 5000, true, NULL, NULL, false }
 #else
-#define IoT_Client_Init_Params_initializer { true, NULL, 0, NULL, NULL, NULL, 2000, 20000, 5000, true, NULL, NULL }
+#define IoT_Client_Init_Params_initializer { true, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 2000, 20000, 5000, true, NULL, NULL }
 #endif
 
 /**
